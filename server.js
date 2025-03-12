@@ -18,32 +18,43 @@ requiredEnvVars.forEach((key) => {
 
 const app = express();
 
-//  Middleware
+// Define Allowed Origins
+const allowedOrigins = [
+  "http://localhost:3000", // Local development
+  "https://frontend-dashboard-omega.vercel.app", // Deployed frontend
+];
+
+// Middleware
 app.use(
   cors({
     credentials: true,
-    origin: process.env.CLIENT_ORIGIN?.split(",") || "http://localhost:3000", // Supports multiple origins
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
   })
 );
 app.use(express.json());
 app.use(cookieParser());
 
-//  Debugging: Show environment variables in development only
+// Debugging: Show environment variables in development only
 if (process.env.NODE_ENV !== "production") {
   console.log(" Loaded Environment Variables:", {
     MONGO_URI: process.env.MONGO_URI ? ";-) Set" : ":-( Not Set",
     PORT: process.env.PORT,
-    CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || "http://localhost:3000",
     NODE_ENV: process.env.NODE_ENV,
   });
 }
 
-//  MongoDB Connection with Retry Logic
+// MongoDB Connection with Retry Logic
 const connectDB = async (attempts = 5) => {
   console.log("<><> Connecting to MongoDB...");
   for (let i = 0; i < attempts; i++) {
     try {
-      await mongoose.connect(process.env.MONGO_URI); //  Removed deprecated options
+      await mongoose.connect(process.env.MONGO_URI);
       console.log(`Yepp! MongoDB Connected: ${mongoose.connection.host}`);
 
       mongoose.connection.on("error", (err) => {
@@ -52,17 +63,17 @@ const connectDB = async (attempts = 5) => {
 
       mongoose.connection.on("disconnected", () => {
         console.warn(" MongoDB Disconnected! Reconnecting...");
-        connectDB(); // Auto-reconnect if disconnected
+        connectDB();
       });
 
-      return; // Exit loop on success
+      return;
     } catch (err) {
       console.error(` MongoDB Connection Failed (Attempt ${i + 1}/${attempts}):`, err);
       if (i < attempts - 1) {
         console.log("<><> Retrying in 5 seconds...");
         await new Promise((res) => setTimeout(res, 5000));
       } else {
-        process.exit(1); // Exit after max retries
+        process.exit(1);
       }
     }
   }
@@ -76,10 +87,10 @@ import sheetRoutes from "./routes/sheets.js";
 app.use("/api/auth", authRoutes);
 app.use("/api/sheets", sheetRoutes);
 
-//  Root Test Route
+// Root Test Route
 app.get("/", (req, res) => res.send(" Server is Running!"));
 
-//  Graceful Shutdown Handling
+// Graceful Shutdown Handling
 const shutdown = async () => {
   console.log("\n Shutting down...");
   await mongoose.connection.close();
@@ -91,4 +102,4 @@ process.on("SIGTERM", shutdown);
 
 // Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
